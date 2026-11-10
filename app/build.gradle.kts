@@ -107,12 +107,7 @@ dependencies {
 
     implementation(libs.coil.compose)
 
-    implementation(libs.okhttp) {
-        // OkHttp 5.x pulls a Kotlin 2.2 stdlib whose metadata is unreadable by our
-        // Kotlin 2.0 compiler. Pin to the toolchain version.
-        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
-    }
-    implementation(kotlin("stdlib"))
+    implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
 
