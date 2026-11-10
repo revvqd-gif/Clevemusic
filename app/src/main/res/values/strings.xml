@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Clevemusic</string>
+    <string name="tab_home">Beranda</string>
+    <string name="tab_search">Cari</string>
+    <string name="tab_library">Koleksi</string>
+    <string name="search_hint">Cari lagu, artis, atau album</string>
+    <string name="now_playing">Sedang diputar</string>
+    <string name="recent">Baru diputar</string>
+    <string name="empty_recent">Belum ada lagu. Cari sesuatu untuk mulai.</string>
+    <string name="empty_search">Ketik untuk mencari di YouTube.</string>
+    <string name="no_results">Tidak ada hasil untuk pencarian itu.</string>
+    <string name="loading">Memuat…</string>
+    <string name="resolving">Menyiapkan audio…</string>
+    <string name="resolve_failed">Gagal mengambil audio. Coba lagi.</string>
+    <string name="queue">Antrean</string>
+    <string name="playlists">Playlist</string>
+    <string name="new_playlist">Playlist baru</string>
+    <string name="add_to_playlist">Tambah ke playlist</string>
+    <string name="playlist_name">Nama playlist</string>
+    <string name="cancel">Batal</string>
+    <string name="create">Buat</string>
+    <string name="play_all">Putar semua</string>
+    <string name="shuffle">Acak</string>
+    <string name="repeat">Ulangi</string>
+</resources>
