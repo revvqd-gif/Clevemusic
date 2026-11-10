@@ -4,6 +4,9 @@ import android.util.Log
 import com.cleve.music.data.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -32,6 +35,33 @@ import java.util.concurrent.TimeUnit
  * Request, returning `Response` with byte body + headers), so this adapter covers
  * everything the library needs while OkHttp owns pooling and TLS.
  */
+/**
+ * In-memory cookie store.
+ *
+ * YouTube answers the first request with a consent / visitor cookie and then refuses
+ * to return usable JSON unless that cookie comes back on the following calls. The
+ * default OkHttp client has no jar, so every request looked like a fresh browser and
+ * the extractor received a stub document — which is what produced
+ * `JsonObject.getObject(...) on a null object reference`.
+ */
+class MemoryCookieJar : CookieJar {
+    private val store = LinkedHashMap<String, Cookie>()
+
+    @Synchronized
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        cookies.forEach { store[key(it)] = it }
+    }
+
+    @Synchronized
+    override fun loadForRequest(url: HttpUrl): List<Cookie> =
+        store.values.filter { it.matches(url) }
+
+    @Synchronized
+    fun clear() = store.clear()
+
+    private fun key(c: Cookie) = "${c.domain}|${c.name}|${c.path}"
+}
+
 class OkHttpNewPipeDownloader(
     private val client: OkHttpClient = defaultClient,
 ) : Downloader() {
@@ -46,9 +76,14 @@ class OkHttpNewPipeDownloader(
         }
 
         val builder = Request.Builder().url(request.url()).method(method, body)
+
+        // Baseline browser identity; NewPipe's own headers may override these after.
+        builder.header("User-Agent", USER_AGENT)
+        builder.header("Accept-Language", "en-US,en;q=0.9")
+
         request.headers().forEach { (key, values) ->
             if (key.equals("Content-Length", ignoreCase = true)) return@forEach
-            values.forEach { value -> builder.addHeader(key, value) }
+            values.forEach { value -> builder.header(key, value) }
         }
 
         client.newCall(builder.build()).execute().use { response ->
@@ -66,11 +101,21 @@ class OkHttpNewPipeDownloader(
     companion object {
         private const val TAG = "NpDownloader"
 
+        /** Shared cookie jar so YouTube's consent + visitor cookies survive requests. */
+        val cookieJar = MemoryCookieJar()
+
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+
         val defaultClient: OkHttpClient = OkHttpClient.Builder()
+            .cookieJar(cookieJar)
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .callTimeout(60, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            .followRedirects(true)
+            .followSslRedirects(true)
             .build()
 
         @Volatile
@@ -198,21 +243,32 @@ class YouTubeExtractor {
     }
 
     /**
-     * Runs an extraction, retrying once after refreshing the consent state.
+     * Runs an extraction, retrying after clearing cookies and re-accepting consent.
      *
-     * YouTube occasionally serves an interstitial whose JSON lacks the fields the
-     * extractor expects; that surfaces as a NullPointerException deep in nanojson
-     * (`getObject(...) on a null object reference`) rather than a clean
-     * ExtractionException. Re-initialising the consent cookie usually clears it.
+     * YouTube serves an interstitial on a cold cookie jar whose JSON lacks the fields
+     * the extractor expects, surfacing as a NullPointerException deep in nanojson
+     * (`getObject(...) on a null object reference`). Dropping the jar forces a fresh
+     * consent handshake, which yields a complete response.
      */
     private inline fun <T> runExtraction(block: () -> T): T {
         return try {
             block()
         } catch (e: Exception) {
             if (!isRecoverable(e)) throw e
-            Log.w(TAG, "extraction failed, retrying after consent refresh: ${e.message}")
+            Log.w(TAG, "extraction failed, retrying with fresh cookies: ${e.message}")
+            runCatching { OkHttpNewPipeDownloader.cookieJar.clear() }
+            runCatching { OkHttpNewPipeDownloader.install() }
             runCatching { YoutubeParsingHelper.setConsentAccepted(true) }
-            block()
+            try {
+                block()
+            } catch (second: Exception) {
+                if (!isRecoverable(second)) throw second
+                // One last attempt with a clean slate before giving up.
+                runCatching { OkHttpNewPipeDownloader.cookieJar.clear() }
+                runCatching { YoutubeParsingHelper.setConsentAccepted(false) }
+                runCatching { YoutubeParsingHelper.setConsentAccepted(true) }
+                block()
+            }
         }
     }
 
