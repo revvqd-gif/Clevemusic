@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 enum class Ph(val code: String) {
     House("\uE2C2"),
     Search("\uE30C"),
+    MagnifyingGlass("\uE30C"),
     MusicNotes("\uE340"),
     MusicNote("\uE33C"),
     Play("\uE3D0"),

@@ -45,10 +45,8 @@ class PlaybackService : MediaSessionService() {
         player = exo
         mediaSession = MediaSession.Builder(this, exo)
             .setSessionActivity(sessionActivity)
-            .apply {
-                setRepeatMode(Player.REPEAT_MODE_OFF)
-            }
             .build()
+        exo.repeatMode = Player.REPEAT_MODE_OFF
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession

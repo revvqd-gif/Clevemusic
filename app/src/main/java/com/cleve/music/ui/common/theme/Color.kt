@@ -30,8 +30,5 @@ data class CleveColors(
 
 val LocalCleveColors = staticCompositionLocalOf { CleveColors() }
 
-val CleveTheme.colors: CleveColors
-    get() = LocalCleveColors.current
-
 @Composable
 fun cleveColors() = LocalCleveColors.current

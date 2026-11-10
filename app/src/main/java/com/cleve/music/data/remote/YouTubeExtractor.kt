@@ -49,11 +49,12 @@ class OkHttpNewPipeDownloader(
         }
 
         client.newCall(builder.build()).execute().use { response ->
+            val bodyText = response.body?.string() ?: ""
             return NpResponse(
                 response.code,
                 response.message,
                 response.headers.toMultimap(),
-                response.body?.bytes() ?: ByteArray(0),
+                bodyText,
                 request.url(),
             )
         }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -294,7 +295,7 @@ private fun BottomNav(current: Tab, onSelect: (Tab) -> Unit) {
 }
 
 @Composable
-private fun Toast(message: String?, onGone: () -> Unit) {
+private fun BoxScope.Toast(message: String?, onGone: () -> Unit) {
     val colors = cleveColors()
     LaunchedEffect(message) {
         if (message != null) {
@@ -306,7 +307,6 @@ private fun Toast(message: String?, onGone: () -> Unit) {
         visible = message != null,
         enter = fadeIn() + slideInVertically { it / 2 },
         exit = fadeOut() + slideOutVertically { it / 2 },
-        modifier = Modifier.align(Alignment.BottomCenter),
     ) {
         Box(
             modifier = Modifier

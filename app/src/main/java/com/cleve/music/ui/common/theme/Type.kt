@@ -13,20 +13,26 @@ import com.cleve.music.R
  * Two-family pairing:
  *  - Sora        → brand / display / big numbers (geometric, techy, tight tracking)
  *  - Outfit      → UI body, labels, captions (friendly, high legibility at small sizes)
+ *
+ * Both are variable fonts; `FontVariation.weight` selects the instance so Android does
+ * not need a separate file per weight.
  */
+@Suppress("DEPRECATION")
+private fun variableFont(weight: Int) = FontVariation.Settings(FontVariation.weight(weight))
+
 val SoraFamily = FontFamily(
-    Font(R.font.sora, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
-    Font(R.font.sora, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
-    Font(R.font.sora, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
-    Font(R.font.sora, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+    Font(R.font.sora, weight = FontWeight.Normal, variationSettings = variableFont(400)),
+    Font(R.font.sora, weight = FontWeight.Medium, variationSettings = variableFont(500)),
+    Font(R.font.sora, weight = FontWeight.SemiBold, variationSettings = variableFont(600)),
+    Font(R.font.sora, weight = FontWeight.Bold, variationSettings = variableFont(700)),
 )
 
 val OutfitFamily = FontFamily(
-    Font(R.font.outfit, weight = FontWeight.Light, variationSettings = FontVariation.Settings(FontVariation.weight(300))),
-    Font(R.font.outfit, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
-    Font(R.font.outfit, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
-    Font(R.font.outfit, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
-    Font(R.font.outfit, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+    Font(R.font.outfit, weight = FontWeight.Light, variationSettings = variableFont(300)),
+    Font(R.font.outfit, weight = FontWeight.Normal, variationSettings = variableFont(400)),
+    Font(R.font.outfit, weight = FontWeight.Medium, variationSettings = variableFont(500)),
+    Font(R.font.outfit, weight = FontWeight.SemiBold, variationSettings = variableFont(600)),
+    Font(R.font.outfit, weight = FontWeight.Bold, variationSettings = variableFont(700)),
 )
 
 private fun sora(size: Int, weight: FontWeight, spacing: Double = -0.4, line: Int = (size * 1.25).toInt()) =
