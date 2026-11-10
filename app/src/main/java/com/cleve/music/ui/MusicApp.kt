@@ -55,6 +55,8 @@ import com.cleve.music.ui.player.MiniPlayer
 import com.cleve.music.ui.player.NowPlayingScreen
 import com.cleve.music.ui.search.SearchScreen
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.imePadding
 
@@ -100,7 +102,11 @@ fun MusicApp(viewModel: MusicViewModel) {
                 .fillMaxSize()
                 .background(colors.background),
         ) {
-            Column(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding(),
+            ) {
                 Box(Modifier.weight(1f)) {
                     when {
                         openPlaylistId != null -> {
@@ -239,7 +245,7 @@ private fun BottomNav(current: Tab, onSelect: (Tab) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.background)
-            .systemBarsPadding()
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -311,6 +317,7 @@ private fun BoxScope.Toast(message: String?, onGone: () -> Unit) {
         Box(
             modifier = Modifier
                 .padding(bottom = 120.dp)
+                .navigationBarsPadding()
                 .clip(RoundedCornerShape(16.dp))
                 .background(colors.surfacePressed)
                 .border(1.dp, colors.lime.copy(alpha = 0.35f), RoundedCornerShape(16.dp))

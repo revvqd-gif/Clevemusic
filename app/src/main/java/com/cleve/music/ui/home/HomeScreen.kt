@@ -145,7 +145,7 @@ private fun HeroCard(nowPlaying: Track?, onPlayAll: () -> Unit) {
                 Brush.linearGradient(
                     listOf(
                         colors.limeDeep.copy(alpha = 0.22f),
-                        colors.surface,
+                        colors.surfaceDeep,
                     ),
                 ),
             )

@@ -14,7 +14,10 @@ import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request as NpRequest
 import org.schabi.newpipe.extractor.downloader.Response as NpResponse
 import org.schabi.newpipe.extractor.exceptions.ExtractionException
+import org.schabi.newpipe.extractor.localization.ContentCountry
+import org.schabi.newpipe.extractor.localization.Localization
 import org.schabi.newpipe.extractor.search.SearchExtractor
+import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -73,13 +76,27 @@ class OkHttpNewPipeDownloader(
         @Volatile
         private var installed = false
 
-        /** Idempotent: NewPipe's singleton init is not safe to run twice. */
+        /**
+         * Idempotent initialisation.
+         *
+         * NewPipe's singleton init is not safe to run twice, so this guards on a flag.
+         * Localisation is set explicitly to English/US: without it YouTube answers with
+         * a consent interstitial whose JSON shape differs from what the extractor parses,
+         * producing `getObject(...) on a null object reference`.
+         */
         fun install() {
             if (installed) return
             synchronized(this) {
                 if (installed) return
                 try {
-                    NewPipe.init(defaultClient.let { OkHttpNewPipeDownloader(it) })
+                    val localization = Localization("en", "US")
+                    NewPipe.init(
+                        OkHttpNewPipeDownloader(defaultClient),
+                        localization,
+                        ContentCountry("US"),
+                    )
+                    // Accept the consent wall so the extractor receives real page data.
+                    YoutubeParsingHelper.setConsentAccepted(true)
                     installed = true
                 } catch (e: Exception) {
                     Log.e(TAG, "NewPipe init failed", e)
@@ -100,19 +117,20 @@ class YouTubeExtractor {
     }
 
     suspend fun search(query: String, limit: Int = 25): List<Track> = withContext(Dispatchers.IO) {
-        val extractor: SearchExtractor = ServiceList.YouTube.getSearchExtractor(query)
-        val page = extractor.initialPage
-        page.items.asSequence()
-            .filterIsInstance<StreamInfoItem>()
-            .filter { item ->
-                item.streamType != StreamType.LIVE_STREAM &&
-                    item.streamType != StreamType.AUDIO_LIVE_STREAM
-            }
-            .take(limit)
-            .map { item -> item.toTrack() }
-            .toList()
+        runExtraction {
+            val extractor: SearchExtractor = ServiceList.YouTube.getSearchExtractor(query)
+            val page = extractor.initialPage
+            page.items.asSequence()
+                .filterIsInstance<StreamInfoItem>()
+                .filter { item ->
+                    item.streamType != StreamType.LIVE_STREAM &&
+                        item.streamType != StreamType.AUDIO_LIVE_STREAM
+                }
+                .take(limit)
+                .map { item -> item.toTrack() }
+                .toList()
+        }
     }
-
     /**
      * Resolves the best audio-only stream for playback: highest bitrate wins, with a
      * progressive stream preferred over adaptive at equal bitrate because it needs no
@@ -120,40 +138,43 @@ class YouTubeExtractor {
      */
     suspend fun resolveStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
         try {
-            val info = StreamInfo.getInfo(
-                ServiceList.YouTube,
-                "https://www.youtube.com/watch?v=$videoId",
-            )
+            val url = "https://www.youtube.com/watch?v=$videoId"
+            runExtraction {
+                val info: StreamInfo = StreamInfo.getInfo(ServiceList.YouTube, url)
 
-            info.audioStreams
-                .asSequence()
-                .filter { stream -> !stream.url.isNullOrBlank() }
-                .sortedWith(
-                    compareByDescending<AudioStream> { it.averageBitrate },
-                )
-                .firstOrNull()
-                ?.url
-                ?: info.hlsUrl?.takeIf { it.isNotBlank() }
+                info.audioStreams
+                    .asSequence()
+                    .filter { stream -> !stream.url.isNullOrBlank() }
+                    .sortedByDescending { it.averageBitrate }
+                    .firstOrNull()
+                    ?.url
+                    ?: info.hlsUrl?.takeIf { it.isNotBlank() }
+            }
         } catch (e: ExtractionException) {
             Log.w(TAG, "resolveStreamUrl failed for $videoId: ${e.message}")
             null
         } catch (e: IOException) {
             Log.w(TAG, "resolveStreamUrl network error for $videoId: ${e.message}")
             null
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveStreamUrl unexpected error for $videoId: ${e.message}")
+            null
         }
     }
 
     suspend fun related(videoId: String, limit: Int = 15): List<Track> = withContext(Dispatchers.IO) {
         runCatching {
-            val info = StreamInfo.getInfo(
-                ServiceList.YouTube,
-                "https://www.youtube.com/watch?v=$videoId",
-            )
-            info.relatedItems.asSequence()
-                .filterIsInstance<StreamInfoItem>()
-                .take(limit)
-                .map { it.toTrack() }
-                .toList()
+            runExtraction {
+                val info = StreamInfo.getInfo(
+                    ServiceList.YouTube,
+                    "https://www.youtube.com/watch?v=$videoId",
+                )
+                info.relatedItems.asSequence()
+                    .filterIsInstance<StreamInfoItem>()
+                    .take(limit)
+                    .map { it.toTrack() }
+                    .toList()
+            }
         }.getOrDefault(emptyList())
     }
 
@@ -174,6 +195,34 @@ class YouTubeExtractor {
         if (afterV.isNotBlank()) return afterV
         val trimmed = url.trimEnd('/')
         return trimmed.substringAfterLast('/')
+    }
+
+    /**
+     * Runs an extraction, retrying once after refreshing the consent state.
+     *
+     * YouTube occasionally serves an interstitial whose JSON lacks the fields the
+     * extractor expects; that surfaces as a NullPointerException deep in nanojson
+     * (`getObject(...) on a null object reference`) rather than a clean
+     * ExtractionException. Re-initialising the consent cookie usually clears it.
+     */
+    private inline fun <T> runExtraction(block: () -> T): T {
+        return try {
+            block()
+        } catch (e: Exception) {
+            if (!isRecoverable(e)) throw e
+            Log.w(TAG, "extraction failed, retrying after consent refresh: ${e.message}")
+            runCatching { YoutubeParsingHelper.setConsentAccepted(true) }
+            block()
+        }
+    }
+
+    /** True for the JSON-shape / null-pointer failures that a retry can fix. */
+    private fun isRecoverable(e: Exception): Boolean {
+        val message = e.message.orEmpty()
+        return e is NullPointerException ||
+            message.contains("null object reference") ||
+            message.contains("JsonObject") ||
+            message.contains("nanojson")
     }
 
     companion object {
